@@ -1,0 +1,20 @@
+@"
+.env
+.env.*
+venv/
+.venv/
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.pytest_cache/
+.streamlit/secrets.toml
+
+.vscode/
+.idea/
+
+.DS_Store
+Thumbs.db
+"@ | Set-Content -Path .gitignore
