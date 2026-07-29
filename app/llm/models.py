@@ -5,34 +5,58 @@ from app.schemas.planner import ExecutionPlan
 from app.schemas.research import ResearchResult
 
 
-# General reasoning model
+# =========================================================
+# GENERAL REASONING MODEL
+# =========================================================
+
 llm = ChatNVIDIA(
     model="deepseek-ai/deepseek-v4-flash",
     api_key=settings.NVIDIA_API_KEY,
     temperature=0,
+    max_tokens=3000,
     timeout=180,
 )
 
 
-# Structured-output model
-structured_llm = ChatNVIDIA(
-    model="openai/gpt-oss-120b",
+# =========================================================
+# STRUCTURED OUTPUT BASE MODEL
+# =========================================================
+
+structured_base = ChatNVIDIA(
+    model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
     api_key=settings.NVIDIA_API_KEY,
     temperature=0,
+    max_tokens=3000,
     timeout=180,
 )
 
 
-planner_llm = structured_llm.with_structured_output(
+# =========================================================
+# PLANNER
+# =========================================================
+
+planner_llm = structured_base.with_structured_output(
     ExecutionPlan
 )
 
-research_llm = structured_llm.with_structured_output(
+
+# =========================================================
+# RESEARCH
+# =========================================================
+
+research_llm = structured_base.with_structured_output(
     ResearchResult
 )
 
 
-# Cheap relevance classification
+# Normal model exposed for JSON fallback.
+research_base = structured_base
+
+
+# =========================================================
+# RELEVANCE CLASSIFIER
+# =========================================================
+
 relevance_llm = ChatNVIDIA(
     model="meta/llama-3.1-8b-instruct",
     api_key=settings.NVIDIA_API_KEY,
