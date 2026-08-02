@@ -129,34 +129,46 @@ builder.add_edge(
 # SYNTHESIS
 # =========================================================
 
+# ==========================================
+# SYNTHESIS
+# ==========================================
+
 builder.add_edge(
     "merge",
     "research",
 )
 
+
+# ==========================================
+# PARALLEL POST-PROCESSING
+# ==========================================
+
+# Generate the user report.
 builder.add_edge(
     "research",
     "report",
 )
 
+# Store long-term memories independently.
+builder.add_edge(
+    "research",
+    "memory_write",
+)
 
-# =========================================================
-# MEMORY WRITE
-# =========================================================
 
-# Store useful research after the report
-# has been successfully generated.
+# ==========================================
+# END
+# ==========================================
 
 builder.add_edge(
     "report",
-    "memory_write",
+    END,
 )
 
 builder.add_edge(
     "memory_write",
     END,
 )
-
 
 # =========================================================
 # COMPILE
