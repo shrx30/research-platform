@@ -1,7 +1,10 @@
 import arxiv
 
 
-def search_papers(query: str, limit: int = 5):
+def search_papers(
+    query: str,
+    limit: int = 5,
+) -> list[dict]:
 
     client = arxiv.Client()
 
@@ -18,9 +21,14 @@ def search_papers(query: str, limit: int = 5):
         papers.append(
             {
                 "title": result.title,
-                "authors": [author.name for author in result.authors],
+                "authors": [
+                    author.name
+                    for author in result.authors
+                ],
                 "summary": result.summary,
-                "published": result.published.strftime("%Y-%m-%d"),
+                "published": result.published.strftime(
+                    "%Y-%m-%d"
+                ),
                 "url": result.entry_id,
             }
         )

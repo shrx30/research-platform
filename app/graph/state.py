@@ -1,23 +1,27 @@
 from typing import TypedDict
+
 from app.schemas.research import ResearchResult
 
 
-class ResearchState(TypedDict):
+class ResearchState(TypedDict, total=False):
+
     # User input
     query: str
 
     # Planner output
-    plan: list[dict]
+    plan: list
 
     # Agent outputs
-    web_context: str
-    github_context: str
-    paper_context: str
-    memory_context: str
+    web_results: str
+    github_results: str
+    paper_results: str
+    memory_results: str
 
-    # Merge output
+    # Merged research context
     merged_context: str
 
-    # Final outputs
+    # Final structured result
     research_result: ResearchResult
+
+    # Final report
     report: str

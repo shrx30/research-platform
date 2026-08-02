@@ -1,6 +1,4 @@
 from app.Tools.github_tools import search_github
-
-
 def run(task: str) -> str:
     """
     Execute a GitHub search task and convert
@@ -34,4 +32,7 @@ URL:
 """
         )
 
-    return "\n\n-----------------------------\n\n".join(contexts)
+    return (
+        "\n\n-----------------------------\n\n"
+        .join(contexts)
+    )

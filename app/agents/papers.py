@@ -1,75 +1,35 @@
 from app.Tools.papers_tools import search_papers
-from app.agents.relevance import evaluate_relevance
 
 
-RELEVANCE_THRESHOLD = 0.7
+def run(task: str) -> str:
+    """Search arXiv and return paper results as text."""
 
-
-def run(query: str, user_query: str) -> str:
-
-    papers = search_papers(query)
+    papers = search_papers(task, limit=5)
 
     if not papers:
-        return "No papers found."
+        return "No research papers found."
 
     contexts = []
 
     for paper in papers:
+        authors = paper.get("authors", [])
 
-        evaluation_content = f"""
-Title:
-{paper["title"]}
-
-Abstract:
-{paper["summary"]}
-"""
-
-        try:
-            evaluation = evaluate_relevance(
-                user_query=user_query,
-                content=evaluation_content,
-            )
-
-        except Exception as exc:
-            print(
-                f"[PAPERS] Relevance check failed for "
-                f"'{paper['title']}': {exc}"
-            )
-
-            # Keep result if evaluator itself failed
-            continue
-
-        keep = evaluation.score >= RELEVANCE_THRESHOLD
-
-        print(
-            f"[PAPERS] {paper['title'][:60]} "
-            f"→ {evaluation.score:.2f} "
-            f"({'KEEP' if keep else 'DROP'})"
-        )
-
-        if not keep:
-            continue
+        if isinstance(authors, list):
+            authors = ", ".join(authors)
 
         contexts.append(
             f"""
-Title:
-{paper["title"]}
+Title: {paper.get("title", "Unknown")}
 
-Authors:
-{", ".join(paper["authors"])}
+Authors: {authors}
 
-Published:
-{paper["published"]}
+Published: {paper.get("published", "Unknown")}
 
-URL:
-{paper["url"]}
+Summary:
+{paper.get("summary", "")}
 
-Abstract:
-{paper["summary"]}
+URL: {paper.get("url", "")}
 """
         )
 
-    if not contexts:
-        return "No relevant academic papers found."
-
-    return "\n\n---------------------------\n\n".join(contexts)
+    return "\n\n-------------------------\n\n".join(contexts)
