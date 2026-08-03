@@ -948,12 +948,23 @@ def merge_node(
 
     print(
         "[MERGE] State keys:",
-        list(
-            state.keys()
-        ),
+        list(state.keys()),
     )
 
+    # =====================================================
+    # CONTEXT BUDGETS
+    # =====================================================
+
+    WEB_BUDGET = 4000
+    PAPER_BUDGET = 4000
+    GITHUB_BUDGET = 2500
+    MEMORY_BUDGET = 1500
+
     sections: list[str] = []
+
+    # =====================================================
+    # GET RESULTS
+    # =====================================================
 
     web_results = str(
         state.get(
@@ -987,17 +998,166 @@ def merge_node(
         or ""
     ).strip()
 
+    # =====================================================
+    # SAFE BLOCK TRUNCATION
+    # =====================================================
+
+    def truncate_blocks(
+        text: str,
+        budget: int,
+    ) -> str:
+        """
+        Keep complete retrieval result blocks where possible.
+
+        Retrieval agents separate results using dashed lines,
+        so this avoids cutting a paper/repository/web result
+        in the middle.
+        """
+
+        if not text:
+
+            return ""
+
+        if len(text) <= budget:
+
+            return text
+
+        # Your agents use separators such as:
+        #
+        # -------------------------
+        #
+        # or
+        #
+        # -----------------------------
+
+        blocks = re.split(
+            r"\n\s*-{10,}\s*\n",
+            text,
+        )
+
+        selected: list[str] = []
+
+        current_length = 0
+
+        separator = (
+            "\n\n-------------------------\n\n"
+        )
+
+        for block in blocks:
+
+            block = block.strip()
+
+            if not block:
+
+                continue
+
+            additional_length = len(block)
+
+            if selected:
+
+                additional_length += len(
+                    separator
+                )
+
+            # Stop before exceeding budget.
+            if (
+                current_length + additional_length
+                > budget
+            ):
+
+                break
+
+            selected.append(
+                block
+            )
+
+            current_length += additional_length
+
+        # Edge case:
+        # first result itself is larger than budget.
+        if not selected:
+
+            return text[:budget]
+
+        return separator.join(
+            selected
+        )
+
+    # =====================================================
+    # APPLY BUDGETS
+    # =====================================================
+
+    original_web_length = len(
+        web_results
+    )
+
+    original_github_length = len(
+        github_results
+    )
+
+    original_paper_length = len(
+        paper_results
+    )
+
+    original_memory_length = len(
+        memory_results
+    )
+
+    web_results = truncate_blocks(
+        web_results,
+        WEB_BUDGET,
+    )
+
+    github_results = truncate_blocks(
+        github_results,
+        GITHUB_BUDGET,
+    )
+
+    paper_results = truncate_blocks(
+        paper_results,
+        PAPER_BUDGET,
+    )
+
+    memory_results = truncate_blocks(
+        memory_results,
+        MEMORY_BUDGET,
+    )
+
+    # =====================================================
+    # DEBUG
+    # =====================================================
+
     print(
-        "[MERGE] GitHub length:",
-        len(
-            github_results
-        ),
+        "[MERGE] Evidence budgets:"
     )
 
     print(
-        "[MERGE] GitHub preview:",
-        github_results[:300],
+        f"[MERGE] Web: "
+        f"{original_web_length} -> "
+        f"{len(web_results)}"
     )
+
+    print(
+        f"[MERGE] GitHub: "
+        f"{original_github_length} -> "
+        f"{len(github_results)}"
+    )
+
+    print(
+        f"[MERGE] Papers: "
+        f"{original_paper_length} -> "
+        f"{len(paper_results)}"
+    )
+
+    print(
+        f"[MERGE] Memory: "
+        f"{original_memory_length} -> "
+        f"{len(memory_results)}"
+    )
+
+    # =====================================================
+    # BUILD MERGED CONTEXT
+    # =====================================================
 
     if web_results:
 
@@ -1031,6 +1191,10 @@ def merge_node(
         sections
     )
 
+    # =====================================================
+    # VALIDATION
+    # =====================================================
+
     if not merged_context:
 
         log_latency(
@@ -1042,9 +1206,46 @@ def merge_node(
             "No research evidence was produced."
         )
 
+    # =====================================================
+    # METRICS
+    # =====================================================
+
+    original_total = (
+        original_web_length
+        + original_github_length
+        + original_paper_length
+        + original_memory_length
+    )
+
+    final_total = len(
+        merged_context
+    )
+
+    reduction = 0.0
+
+    if original_total > 0:
+
+        reduction = (
+            1
+            - (
+                final_total
+                / original_total
+            )
+        ) * 100
+
     print(
-        f"[MERGE] Context length: "
-        f"{len(merged_context)} characters"
+        f"[MERGE] Original evidence: "
+        f"{original_total} characters"
+    )
+
+    print(
+        f"[MERGE] Final context: "
+        f"{final_total} characters"
+    )
+
+    print(
+        f"[MERGE] Reduction: "
+        f"{reduction:.1f}%"
     )
 
     log_latency(
@@ -1055,12 +1256,6 @@ def merge_node(
     return {
         "merged_context": merged_context
     }
-
-
-# =========================================================
-# RESEARCH SYNTHESIS
-# =========================================================
-
 
 def research_node(
     state: ResearchState,

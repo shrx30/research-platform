@@ -66,11 +66,11 @@ structured_base = ChatNVIDIA(
 #
 
 research_base = ChatNVIDIA(
-    model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
+    model="meta/llama-3.1-8b-instruct",
     api_key=settings.NVIDIA_API_KEY,
     temperature=0,
-    max_tokens=2000,
-    timeout=90,
+    max_tokens=1500,
+    timeout=60,
 )
 
 
