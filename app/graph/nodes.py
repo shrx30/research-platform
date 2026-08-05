@@ -396,6 +396,22 @@ IMPORTANT ROUTING RULES
 11. Multiple agents are allowed ONLY when the request contains
     multiple distinct information needs.
 
+    Example:
+
+Query:
+"How does agent memory work? Explain the architecture and
+find relevant research papers and GitHub implementations."
+
+Correct agents:
+web, papers, github
+
+Incorrect:
+memory, papers, github
+
+Reason:
+"agent memory" is the subject being researched. The user
+did not request previously stored research.
+
 Examples:
 
 User:
@@ -938,8 +954,6 @@ def memory_agent(
 # =========================================================
 # MERGE NODE
 # =========================================================
-
-
 def merge_node(
     state: ResearchState,
 ):
@@ -959,6 +973,9 @@ def merge_node(
     PAPER_BUDGET = 4000
     GITHUB_BUDGET = 2500
     MEMORY_BUDGET = 1500
+
+    # Separator used by retrieval agents.
+    BLOCK_PATTERN = r"\n\s*-{10,}\s*\n"
 
     sections: list[str] = []
 
@@ -997,6 +1014,337 @@ def merge_node(
         )
         or ""
     ).strip()
+
+    # =====================================================
+    # SPLIT RESULTS INTO EVIDENCE BLOCKS
+    # =====================================================
+
+    def split_blocks(
+        text: str,
+    ) -> list[str]:
+        """
+        Split retrieval output into individual evidence
+        blocks while preserving the contents of each source.
+        """
+
+        if not text:
+            return []
+
+        blocks = re.split(
+            BLOCK_PATTERN,
+            text,
+        )
+
+        return [
+            block.strip()
+            for block in blocks
+            if block.strip()
+        ]
+
+    # =====================================================
+    # BUDGET + EVIDENCE IDS
+    # =====================================================
+
+    def prepare_evidence(
+        text: str,
+        prefix: str,
+        budget: int,
+    ) -> str:
+        """
+        Keep complete evidence blocks within the context
+        budget and assign stable IDs.
+
+        Example:
+
+        [W1]
+        Title: ...
+
+        [W2]
+        Title: ...
+        """
+
+        if not text:
+            return ""
+
+        blocks = split_blocks(
+            text
+        )
+
+        if not blocks:
+            return ""
+
+        selected: list[str] = []
+
+        current_length = 0
+
+        separator = (
+            "\n\n"
+            "-------------------------"
+            "\n\n"
+        )
+
+        for index, block in enumerate(
+            blocks,
+            start=1,
+        ):
+
+            evidence_id = (
+                f"{prefix}{index}"
+            )
+
+            tagged_block = (
+                f"[{evidence_id}]\n"
+                f"{block}"
+            )
+
+            additional_length = len(
+                tagged_block
+            )
+
+            if selected:
+                additional_length += len(
+                    separator
+                )
+
+            # Stop once adding another complete result
+            # would exceed this source's budget.
+            if (
+                current_length
+                + additional_length
+                > budget
+            ):
+
+                break
+
+            selected.append(
+                tagged_block
+            )
+
+            current_length += (
+                additional_length
+            )
+
+        # Edge case:
+        # One result is larger than the entire budget.
+        #
+        # Keep it with its evidence ID so synthesis still
+        # has at least one identifiable source.
+        if not selected:
+
+            evidence_id = (
+                f"{prefix}1"
+            )
+
+            available = max(
+                budget
+                - len(evidence_id)
+                - 4,
+                0,
+            )
+
+            selected.append(
+                f"[{evidence_id}]\n"
+                f"{blocks[0][:available]}"
+            )
+
+        return separator.join(
+            selected
+        )
+
+    # =====================================================
+    # ORIGINAL LENGTHS
+    # =====================================================
+
+    original_web_length = len(
+        web_results
+    )
+
+    original_github_length = len(
+        github_results
+    )
+
+    original_paper_length = len(
+        paper_results
+    )
+
+    original_memory_length = len(
+        memory_results
+    )
+
+    # =====================================================
+    # PREPARE EVIDENCE
+    # =====================================================
+
+    web_results = prepare_evidence(
+        web_results,
+        prefix="W",
+        budget=WEB_BUDGET,
+    )
+
+    github_results = prepare_evidence(
+        github_results,
+        prefix="G",
+        budget=GITHUB_BUDGET,
+    )
+
+    paper_results = prepare_evidence(
+        paper_results,
+        prefix="P",
+        budget=PAPER_BUDGET,
+    )
+
+    memory_results = prepare_evidence(
+        memory_results,
+        prefix="M",
+        budget=MEMORY_BUDGET,
+    )
+
+    # =====================================================
+    # DEBUG
+    # =====================================================
+
+    print(
+        "[MERGE] Evidence budgets:"
+    )
+
+    print(
+        f"[MERGE] Web: "
+        f"{original_web_length} -> "
+        f"{len(web_results)}"
+    )
+
+    print(
+        f"[MERGE] GitHub: "
+        f"{original_github_length} -> "
+        f"{len(github_results)}"
+    )
+
+    print(
+        f"[MERGE] Papers: "
+        f"{original_paper_length} -> "
+        f"{len(paper_results)}"
+    )
+
+    print(
+        f"[MERGE] Memory: "
+        f"{original_memory_length} -> "
+        f"{len(memory_results)}"
+    )
+
+    # =====================================================
+    # BUILD MERGED CONTEXT
+    # =====================================================
+
+    if web_results:
+
+        sections.append(
+            "===== WEB RESEARCH =====\n"
+            + web_results
+        )
+
+    if github_results:
+
+        sections.append(
+            "===== GITHUB RESEARCH =====\n"
+            + github_results
+        )
+
+    if paper_results:
+
+        sections.append(
+            "===== ACADEMIC PAPERS =====\n"
+            + paper_results
+        )
+
+    if memory_results:
+
+        sections.append(
+            "===== LONG-TERM MEMORY =====\n"
+            + memory_results
+        )
+
+    merged_context = "\n\n".join(
+        sections
+    )
+
+    # =====================================================
+    # VALIDATION
+    # =====================================================
+
+    if not merged_context:
+
+        log_latency(
+            "MERGE_FAILED",
+            node_start,
+        )
+
+        raise RuntimeError(
+            "No research evidence was produced."
+        )
+
+    # =====================================================
+    # METRICS
+    # =====================================================
+
+    original_total = (
+        original_web_length
+        + original_github_length
+        + original_paper_length
+        + original_memory_length
+    )
+
+    final_total = len(
+        merged_context
+    )
+
+    reduction = 0.0
+
+    if original_total > 0:
+
+        reduction = (
+            1
+            - (
+                final_total
+                / original_total
+            )
+        ) * 100
+
+    # Find IDs for debugging.
+    evidence_ids = re.findall(
+        r"\[([WGPM]\d+)\]",
+        merged_context,
+    )
+
+    print(
+        "[MERGE] Evidence IDs:",
+        evidence_ids,
+    )
+
+    print(
+        f"[MERGE] Original evidence: "
+        f"{original_total} characters"
+    )
+
+    print(
+        f"[MERGE] Final context: "
+        f"{final_total} characters"
+    )
+
+    print(
+        f"[MERGE] Reduction: "
+        f"{reduction:.1f}%"
+    )
+
+    log_latency(
+        "MERGE",
+        node_start,
+    )
+
+    return {
+        "merged_context": merged_context
+    }
+
+
 
     # =====================================================
     # SAFE BLOCK TRUNCATION
@@ -1278,13 +1626,11 @@ def research_node(
     ).strip()
 
     if not query:
-
         raise ValueError(
             "Research query cannot be empty."
         )
 
     if not merged_context:
-
         raise RuntimeError(
             "Research synthesis received "
             "no research evidence."
@@ -1296,9 +1642,7 @@ def research_node(
 
     MAX_CONTEXT_CHARS = 40_000
 
-    if len(
-        merged_context
-    ) > MAX_CONTEXT_CHARS:
+    if len(merged_context) > MAX_CONTEXT_CHARS:
 
         print(
             "[RESEARCH] Context truncated: "
@@ -1322,29 +1666,71 @@ Answer the user's research question using ONLY the
 supplied research evidence.
 
 
+=====================================================
 USER QUESTION
+=====================================================
 
 {query}
 
 
+=====================================================
 RESEARCH EVIDENCE
+=====================================================
 
 {merged_context}
 
 
-REQUIREMENTS
+=====================================================
+OUTPUT REQUIREMENTS
+=====================================================
 
 Produce:
 
 1. summary
+
    A concise but complete synthesis of the evidence.
 
+
 2. key_findings
-   The most important findings.
+
+   Return the most important findings.
+
+   EVERY finding must contain:
+
+   - claim
+   - evidence_ids
+
+   evidence_ids identify the exact retrieved evidence
+   supporting the claim.
+
+   Valid evidence IDs look like:
+
+   W1
+   W2
+   G1
+   G2
+   P1
+   P2
+   M1
+   M2
+
+   Example:
+
+   {{
+       "claim": "LangGraph uses checkpointers to persist state.",
+       "evidence_ids": ["W1"]
+   }}
+
+   Every claim MUST contain at least one evidence ID.
+
+   Only use evidence IDs that actually appear in the
+   supplied RESEARCH EVIDENCE.
+
 
 3. sources_used
-   Return ONLY source URLs that are actually present
-   in the supplied research evidence.
+
+   Return ONLY source URLs that actually appear in
+   the supplied research evidence.
 
    For web sources:
    return the URL.
@@ -1355,24 +1741,42 @@ Produce:
    For academic papers:
    return the arXiv or paper URL.
 
-   Never reconstruct or invent a URL.
+   Never reconstruct or invent URLs.
+
 
 4. missing_information
+
    Important information that could not be established
-   from the evidence.
+   from the supplied evidence.
+
 
 5. confidence
+
    One of:
+
    Low
    Medium
    High
 
 
+=====================================================
 RESEARCH RULES
+=====================================================
 
 - Answer the user's actual question.
 
+- Use ONLY the supplied research evidence.
+
 - Synthesize evidence rather than copying search results.
+
+- Every key finding must be supported by its cited
+  evidence IDs.
+
+- Never generate an evidence ID that does not appear
+  in the supplied evidence.
+
+- If the evidence does not support a finding,
+  do not include that finding.
 
 - Prefer academic evidence for scientific claims.
 
@@ -1404,19 +1808,33 @@ RESEARCH RULES
   evidence.
 
 
+=====================================================
+RETURN FORMAT
+=====================================================
+
 Return ONLY valid JSON with this structure:
 
 {{
     "summary": "Complete research synthesis",
+
     "key_findings": [
-        "finding"
+        {{
+            "claim": "A finding supported by the evidence.",
+            "evidence_ids": [
+                "P1",
+                "W2"
+            ]
+        }}
     ],
+
     "sources_used": [
         "https://..."
     ],
+
     "missing_information": [
         "missing information"
     ],
+
     "confidence": "High"
 }}
 
@@ -1455,12 +1873,109 @@ Return only the JSON object.
             content
         )
 
+        # =================================================
+        # PYDANTIC VALIDATION
+        # =================================================
+
         result = ResearchResult.model_validate(
             data
         )
 
+        # =================================================
+        # FIND AVAILABLE EVIDENCE IDS
+        # =================================================
+
+        available_evidence_ids = set(
+            re.findall(
+                r"\[([WGPM]\d+)\]",
+                merged_context,
+            )
+        )
+
+        print(
+            "[RESEARCH] Available evidence IDs:",
+            sorted(
+                available_evidence_ids
+            ),
+        )
+
+        # =================================================
+        # VALIDATE CLAIM CITATIONS
+        # =================================================
+
+        for finding in result.key_findings:
+
+            original_ids = list(
+                finding.evidence_ids
+            )
+
+            valid_ids = [
+                evidence_id
+                for evidence_id
+                in original_ids
+                if evidence_id
+                in available_evidence_ids
+            ]
+
+            invalid_ids = [
+                evidence_id
+                for evidence_id
+                in original_ids
+                if evidence_id
+                not in available_evidence_ids
+            ]
+
+            if invalid_ids:
+
+                print(
+                    "[RESEARCH] Removing invalid "
+                    "evidence IDs:",
+                    invalid_ids,
+                )
+
+            finding.evidence_ids = (
+                valid_ids
+            )
+
+        # =================================================
+        # REMOVE UNCITED CLAIMS
+        # =================================================
+
+        original_claim_count = len(
+            result.key_findings
+        )
+
+        result.key_findings = [
+            finding
+            for finding
+            in result.key_findings
+            if finding.evidence_ids
+        ]
+
+        removed_claims = (
+            original_claim_count
+            - len(result.key_findings)
+        )
+
+        if removed_claims:
+
+            print(
+                "[RESEARCH] Removed "
+                f"{removed_claims} finding(s) "
+                "without valid evidence."
+            )
+
+        # =================================================
+        # SUCCESS
+        # =================================================
+
         print(
             "[RESEARCH] Synthesis succeeded."
+        )
+
+        print(
+            "[RESEARCH] Grounded findings:",
+            len(result.key_findings),
         )
 
         log_latency(
@@ -1487,11 +2002,6 @@ Return only the JSON object.
         raise RuntimeError(
             "Research synthesis failed."
         ) from exc
-
-
-# =========================================================
-# REPORT NODE
-# =========================================================
 
 
 def report_node(
@@ -1572,19 +2082,64 @@ def report_node(
 
 """
 
+    # =====================================================
+    # KEY FINDINGS + CLAIM CITATIONS
+    # =====================================================
+
     if key_findings:
 
         for finding in key_findings:
 
-            report += (
-                f"- {finding}\n"
+            claim = getattr(
+                finding,
+                "claim",
+                "",
+            ).strip()
+
+            evidence_ids = (
+                getattr(
+                    finding,
+                    "evidence_ids",
+                    [],
+                )
+                or []
             )
+
+            # ---------------------------------------------
+            # BUILD CITATIONS
+            # ---------------------------------------------
+
+            citations = "".join(
+                f"[{evidence_id}]"
+                for evidence_id
+                in evidence_ids
+                if evidence_id
+            )
+
+            if claim:
+
+                if citations:
+
+                    report += (
+                        f"- {claim} "
+                        f"{citations}\n"
+                    )
+
+                else:
+
+                    report += (
+                        f"- {claim}\n"
+                    )
 
     else:
 
         report += (
             "- No key findings generated.\n"
         )
+
+    # =====================================================
+    # SOURCES
+    # =====================================================
 
     report += (
         "\n## Sources Used\n\n"
@@ -1604,6 +2159,10 @@ def report_node(
             "No sources recorded.\n"
         )
 
+    # =====================================================
+    # MISSING INFORMATION
+    # =====================================================
+
     report += (
         "\n## Missing Information\n\n"
     )
@@ -1621,6 +2180,10 @@ def report_node(
         report += (
             "None\n"
         )
+
+    # =====================================================
+    # CONFIDENCE
+    # =====================================================
 
     report += f"""
 
