@@ -1,6 +1,5 @@
-import hashlib
-import os
-import tempfile
+import time
+import traceback
 
 import streamlit as st
 
@@ -14,16 +13,9 @@ from app.voice.tts import text_to_speech
 # =========================================================
 
 st.set_page_config(
-    page_title="AI Research Platform",
-    page_icon="🔬",
+    page_title="Multi-Agent Research Platform",
+    page_icon="🧠",
     layout="wide",
-)
-
-st.title("🔬 AI Research Platform")
-
-st.caption(
-    "Multi-agent research across the web, GitHub, academic papers, "
-    "and long-term memory — with voice input and output."
 )
 
 
@@ -31,361 +23,662 @@ st.caption(
 # SESSION STATE
 # =========================================================
 
-DEFAULT_STATE = {
-    "voice_query": "",
-    "last_report": None,
-    "report_audio": None,
-    "last_audio_hash": None,
-    "last_query": "",
-}
+if "query" not in st.session_state:
+    st.session_state.query = ""
 
-for key, value in DEFAULT_STATE.items():
+if "result" not in st.session_state:
+    st.session_state.result = None
 
-    if key not in st.session_state:
-        st.session_state[key] = value
+if "last_latency" not in st.session_state:
+    st.session_state.last_latency = None
+
+if "audio_response" not in st.session_state:
+    st.session_state.audio_response = None
 
 
 # =========================================================
-# RESEARCH QUESTION
+# HEADER
 # =========================================================
 
-st.subheader("Research Question")
+st.title("🧠 Multi-Agent Research Platform")
 
-typed_query = st.text_input(
-    "Type your research question",
-    placeholder="e.g. How do patches work in Vision Transformers?",
+st.markdown(
+    """
+Research using specialized AI agents for:
+
+- 🌐 Web research
+- 🐙 GitHub research
+- 📚 Academic papers
+- 🧠 Long-term memory
+- 🎙️ Voice interaction
+- 🔄 Multi-agent orchestration
+"""
 )
 
-st.markdown("**OR**")
+st.divider()
 
 
 # =========================================================
-# MICROPHONE
+# SIDEBAR
 # =========================================================
 
-audio = st.audio_input(
-    "🎙️ Record your research question"
+with st.sidebar:
+
+    st.header("Research Harness")
+
+    st.markdown(
+        """
+### Pipeline
+
+`Query`
+
+↓
+
+`Planner`
+
+↓
+
+`Dynamic Tool Routing`
+
+↓
+
+`Parallel Research Agents`
+
+↓
+
+`Evidence Merge`
+
+↓
+
+`Research Synthesis`
+
+↓
+
+`Report + Memory`
+
+### Agents
+
+- Web
+- GitHub
+- Papers
+- Memory
+
+### Engineering
+
+- Structured outputs
+- Source validation
+- Evidence budgeting
+- Semantic memory
+- Latency tracking
+- Guardrails
+"""
+    )
+
+    st.divider()
+
+    if st.session_state.last_latency is not None:
+
+        st.metric(
+            "Last Run",
+            f"{st.session_state.last_latency:.2f}s",
+        )
+
+
+# =========================================================
+# VOICE INPUT
+# =========================================================
+
+st.subheader("🎙️ Voice Research")
+
+audio_file = st.audio_input(
+    "Ask your research question by voice"
 )
 
+if audio_file is not None:
+
+    try:
+
+        with st.spinner("Transcribing..."):
+
+            transcript = transcribe_audio(
+                audio_file
+            )
+
+        if transcript:
+
+            st.session_state.query = transcript
+
+            st.success(
+                "Voice transcribed successfully."
+            )
+
+            st.write(
+                f"**You said:** {transcript}"
+            )
+
+    except Exception as exc:
+
+        st.error(
+            f"Voice transcription failed: {exc}"
+        )
+
 
 # =========================================================
-# SPEECH TO TEXT
+# TEXT QUERY
 # =========================================================
 
-if audio is not None:
+st.subheader("🔎 Research Query")
 
-    audio_bytes = audio.getvalue()
+query = st.text_area(
+    "What do you want to research?",
+    value=st.session_state.query,
+    height=120,
+    placeholder=(
+        "Example: Research recent developments "
+        "in multi-agent memory systems."
+    ),
+)
 
-    # Prevent Streamlit reruns from transcribing
-    # the same recording repeatedly.
-    audio_hash = hashlib.sha256(
-        audio_bytes
-    ).hexdigest()
+st.session_state.query = query
 
-    if (
-        audio_hash
-        != st.session_state.last_audio_hash
+
+# =========================================================
+# EXAMPLE QUERIES
+# =========================================================
+
+st.caption("Try an example:")
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+
+    if st.button(
+        "Multi-agent memory",
+        use_container_width=True,
     ):
 
-        temp_path = None
+        st.session_state.query = (
+            "Research recent developments "
+            "in multi-agent memory systems."
+        )
 
-        try:
-
-            # st.audio_input returns WAV audio.
-            with tempfile.NamedTemporaryFile(
-                suffix=".wav",
-                delete=False,
-            ) as temp:
-
-                temp.write(
-                    audio_bytes
-                )
-
-                temp_path = (
-                    temp.name
-                )
-
-            # ---------------------------------------------
-            # TRANSCRIBE
-            # ---------------------------------------------
-
-            with st.spinner(
-                "🎧 Transcribing..."
-            ):
-
-                transcript = transcribe_audio(
-                    temp_path
-                )
-
-            transcript = (
-                transcript.strip()
-                if transcript
-                else ""
-            )
-
-            # ---------------------------------------------
-            # VALIDATE TRANSCRIPT
-            # ---------------------------------------------
-
-            if not transcript:
-
-                st.warning(
-                    "No speech was detected. "
-                    "Try recording again."
-                )
-
-            else:
-
-                st.session_state.voice_query = (
-                    transcript
-                )
-
-                st.session_state.last_audio_hash = (
-                    audio_hash
-                )
-
-                # Previous research belongs to the
-                # previous question.
-                st.session_state.last_report = None
-                st.session_state.report_audio = None
-
-        except Exception as exc:
-
-            st.error(
-                f"Transcription failed: {exc}"
-            )
-
-            # Useful during development.
-            st.exception(
-                exc
-            )
-
-        finally:
-
-            # Always remove temporary microphone file.
-            if (
-                temp_path
-                and os.path.exists(
-                    temp_path
-                )
-            ):
-
-                try:
-                    os.remove(
-                        temp_path
-                    )
-
-                except OSError:
-                    pass
+        st.rerun()
 
 
-# =========================================================
-# VOICE TRANSCRIPT
-# =========================================================
+with col2:
 
-if st.session_state.voice_query:
-
-    st.write(
-        "**Voice Transcript**"
-    )
-
-    st.info(
-        st.session_state.voice_query
-    )
-
-
-# =========================================================
-# QUERY SELECTION
-# =========================================================
-
-# Typed question takes priority over voice input.
-
-if typed_query.strip():
-
-    query = (
-        typed_query.strip()
-    )
-
-else:
-
-    query = (
-        st.session_state
-        .voice_query
-        .strip()
-    )
-
-
-# =========================================================
-# ACTION BUTTONS
-# =========================================================
-
-research_col, clear_col = st.columns(
-    [4, 1]
-)
-
-
-with research_col:
-
-    research_clicked = st.button(
-        "🚀 Research",
-        type="primary",
+    if st.button(
+        "RAG frameworks",
         use_container_width=True,
-    )
+    ):
+
+        st.session_state.query = (
+            "Find open-source RAG frameworks "
+            "and explain their current features."
+        )
+
+        st.rerun()
 
 
-with clear_col:
+with col3:
 
-    clear_clicked = st.button(
-        "🗑️ Clear",
+    if st.button(
+        "Vision Transformers",
         use_container_width=True,
-    )
+    ):
 
+        st.session_state.query = (
+            "Find GitHub implementations "
+            "of Vision Transformers."
+        )
 
-# =========================================================
-# CLEAR
-# =========================================================
-
-if clear_clicked:
-
-    st.session_state.voice_query = ""
-    st.session_state.last_report = None
-    st.session_state.report_audio = None
-    st.session_state.last_audio_hash = None
-    st.session_state.last_query = ""
-
-    st.rerun()
+        st.rerun()
 
 
 # =========================================================
 # RUN RESEARCH
 # =========================================================
 
-if research_clicked:
+st.divider()
 
-    # -----------------------------------------------------
-    # VALIDATE QUERY
-    # -----------------------------------------------------
+run_research = st.button(
+    "🚀 Run Research",
+    type="primary",
+    use_container_width=True,
+)
+
+
+if run_research:
+
+    query = st.session_state.query.strip()
 
     if not query:
 
         st.warning(
-            "Type a research question or "
-            "record your question first."
+            "Please enter a research question."
         )
 
-    else:
+        st.stop()
 
-        # Reset previous response.
-        st.session_state.last_report = None
-        st.session_state.report_audio = None
-        st.session_state.last_query = query
+    # -----------------------------------------------------
+    # RUN GRAPH
+    # -----------------------------------------------------
 
-        try:
+    start_time = time.perf_counter()
 
-            # -------------------------------------------------
-            # RUN LANGGRAPH
-            # -------------------------------------------------
+    try:
 
-            with st.spinner(
-                "🔎 Research agents are working..."
-            ):
+        with st.spinner(
+            "Research agents are working..."
+        ):
 
-                result = graph.invoke(
-                    {
-                        "query": query,
-                    }
-                )
-
-            # -------------------------------------------------
-            # VALIDATE GRAPH RESULT
-            # -------------------------------------------------
-
-            if result is None:
-
-                st.error(
-                    "The research graph "
-                    "returned no result."
-                )
-
-            elif not isinstance(
-                result,
-                dict,
-            ):
-
-                st.error(
-                    "The research graph returned "
-                    "an unexpected result type."
-                )
-
-            else:
-
-                report = result.get(
-                    "report"
-                )
-
-                # -----------------------------------------
-                # VALIDATE REPORT
-                # -----------------------------------------
-
-                if not report:
-
-                    st.error(
-                        "Research completed, "
-                        "but no report was generated."
-                    )
-
-                else:
-
-                    st.session_state.last_report = (
-                        report
-                    )
-
-                    st.success(
-                        "Research completed."
-                    )
-
-        except Exception as exc:
-
-            st.error(
-                f"Research failed: {exc}"
+            result = graph.invoke(
+                {
+                    "query": query,
+                }
             )
 
-            # Keep while developing.
-            st.exception(
-                exc
+        elapsed = (
+            time.perf_counter()
+            - start_time
+        )
+
+        st.session_state.result = result
+        st.session_state.last_latency = elapsed
+
+        st.success(
+            f"Research completed in {elapsed:.2f}s"
+        )
+
+    except Exception as exc:
+
+        elapsed = (
+            time.perf_counter()
+            - start_time
+        )
+
+        st.session_state.last_latency = elapsed
+
+        st.error(
+            "Research pipeline failed."
+        )
+
+        st.code(
+            str(exc)
+        )
+
+        with st.expander(
+            "Technical traceback"
+        ):
+
+            st.code(
+                traceback.format_exc()
             )
+
+        st.stop()
 
 
 # =========================================================
-# RESEARCH REPORT
+# DISPLAY RESULT
 # =========================================================
 
-if st.session_state.last_report:
+result = st.session_state.result
+
+
+if result is not None:
 
     st.divider()
+
+    # =====================================================
+    # METRICS
+    # =====================================================
+
+    research_result = result.get(
+        "research_result"
+    )
+
+    memories_written = result.get(
+        "memories_written",
+        0,
+    )
+
+    plan = result.get(
+        "plan",
+        [],
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+
+        st.metric(
+            "Latency",
+            (
+                f"{st.session_state.last_latency:.2f}s"
+                if st.session_state.last_latency
+                else "N/A"
+            ),
+        )
+
+    with col2:
+
+        st.metric(
+            "Agents Selected",
+            len(plan),
+        )
+
+    with col3:
+
+        if research_result is not None:
+
+            findings = getattr(
+                research_result,
+                "key_findings",
+                [],
+            )
+
+            st.metric(
+                "Key Findings",
+                len(findings),
+            )
+
+        else:
+
+            st.metric(
+                "Key Findings",
+                0,
+            )
+
+    with col4:
+
+        st.metric(
+            "Memories Written",
+            memories_written,
+        )
+
+
+    # =====================================================
+    # FINAL REPORT
+    # =====================================================
+
+    report = result.get(
+        "report"
+    )
 
     st.subheader(
         "📄 Research Report"
     )
 
-    # -----------------------------------------------------
-    # SHOW ORIGINAL QUESTION
-    # -----------------------------------------------------
+    if report:
 
-    if st.session_state.last_query:
-
-        st.caption(
-            "Research question: "
-            f"{st.session_state.last_query}"
+        st.markdown(
+            report
         )
 
-    # -----------------------------------------------------
-    # SHOW REPORT
-    # -----------------------------------------------------
+    else:
 
-    st.markdown(
-        st.session_state.last_report
-    )
+        st.warning(
+            "Research completed, but no report was generated."
+        )
+
+        # -------------------------------------------------
+        # Fallback display
+        # -------------------------------------------------
+
+        if research_result is not None:
+
+            st.markdown(
+                "### Summary"
+            )
+
+            st.write(
+                getattr(
+                    research_result,
+                    "summary",
+                    "",
+                )
+            )
+
+            findings = getattr(
+                research_result,
+                "key_findings",
+                [],
+            )
+
+            if findings:
+
+                st.markdown(
+                    "### Key Findings"
+                )
+
+                for finding in findings:
+
+                    st.markdown(
+                        f"- {finding}"
+                    )
+
+
+    # =====================================================
+    # STRUCTURED RESEARCH RESULT
+    # =====================================================
+
+    if research_result is not None:
+
+        with st.expander(
+            "🔬 Structured Research Result"
+        ):
+
+            try:
+
+                if hasattr(
+                    research_result,
+                    "model_dump",
+                ):
+
+                    st.json(
+                        research_result.model_dump()
+                    )
+
+                else:
+
+                    st.json(
+                        research_result.dict()
+                    )
+
+            except Exception:
+
+                st.write(
+                    research_result
+                )
+
+
+    # =====================================================
+    # SOURCES
+    # =====================================================
+
+    if research_result is not None:
+
+        sources = getattr(
+            research_result,
+            "sources_used",
+            [],
+        )
+
+        if sources:
+
+            st.subheader(
+                "🔗 Sources"
+            )
+
+            for source in sources:
+
+                st.markdown(
+                    f"- {source}"
+                )
+
+
+    # =====================================================
+    # MISSING INFORMATION
+    # =====================================================
+
+    if research_result is not None:
+
+        missing = getattr(
+            research_result,
+            "missing_information",
+            [],
+        )
+
+        if missing:
+
+            with st.expander(
+                "⚠️ Missing Information"
+            ):
+
+                for item in missing:
+
+                    st.markdown(
+                        f"- {item}"
+                    )
+
+
+    # =====================================================
+    # CONFIDENCE
+    # =====================================================
+
+    if research_result is not None:
+
+        confidence = getattr(
+            research_result,
+            "confidence",
+            None,
+        )
+
+        if confidence:
+
+            st.subheader(
+                "Confidence"
+            )
+
+            st.info(
+                str(confidence)
+            )
+
+
+    # =====================================================
+    # AGENT ROUTING
+    # =====================================================
+
+    if plan:
+
+        with st.expander(
+            "🧭 Agent Routing"
+        ):
+
+            for item in plan:
+
+                if isinstance(
+                    item,
+                    dict,
+                ):
+
+                    agent = item.get(
+                        "agent",
+                        item.get(
+                            "name",
+                            "unknown",
+                        ),
+                    )
+
+                    search_query = item.get(
+                        "query",
+                        "",
+                    )
+
+                    st.markdown(
+                        f"**{agent}**"
+                    )
+
+                    if search_query:
+
+                        st.code(
+                            search_query
+                        )
+
+                else:
+
+                    st.write(
+                        item
+                    )
+
+
+    # =====================================================
+    # RAW AGENT EVIDENCE
+    # =====================================================
+
+    with st.expander(
+        "🧪 Raw Agent Evidence"
+    ):
+
+        web_results = result.get(
+            "web_results",
+            "",
+        )
+
+        github_results = result.get(
+            "github_results",
+            "",
+        )
+
+        paper_results = result.get(
+            "paper_results",
+            "",
+        )
+
+        memory_results = result.get(
+            "memory_results",
+            "",
+        )
+
+        if web_results:
+
+            st.markdown(
+                "### 🌐 Web"
+            )
+
+            st.text(
+                web_results
+            )
+
+        if github_results:
+
+            st.markdown(
+                "### 🐙 GitHub"
+            )
+
+            st.text(
+                github_results
+            )
+
+        if paper_results:
+
+            st.markdown(
+                "### 📚 Papers"
+            )
+
+            st.text(
+                paper_results
+            )
+
+        if memory_results:
+
+            st.markdown(
+                "### 🧠 Memory"
+            )
+
+            st.text(
+                memory_results
+            )
 
 
     # =====================================================
@@ -398,24 +691,14 @@ if st.session_state.last_report:
         "🔊 Voice Response"
     )
 
-
-    # =====================================================
-    # GENERATE TTS
-    # =====================================================
-
-    if (
-        st.session_state.report_audio
-        is None
-    ):
+    if report:
 
         generate_voice = st.button(
-            "🔊 Generate Voice Response",
+            "Generate Audio Response",
             use_container_width=True,
         )
 
         if generate_voice:
-
-            tts_path = None
 
             try:
 
@@ -423,119 +706,34 @@ if st.session_state.last_report:
                     "Generating voice response..."
                 ):
 
-                    # -------------------------------------
-                    # GENERATE AUDIO FILE
-                    # -------------------------------------
-
-                    tts_path = text_to_speech(
-                        st.session_state.last_report
+                    audio = text_to_speech(
+                        report
                     )
 
-                    # -------------------------------------
-                    # VALIDATE FILE
-                    # -------------------------------------
+                if audio:
 
-                    if not tts_path:
+                    st.session_state.audio_response = audio
 
-                        raise RuntimeError(
-                            "TTS returned no "
-                            "audio file."
-                        )
-
-                    if not os.path.exists(
-                        tts_path
-                    ):
-
-                        raise FileNotFoundError(
-                            "Generated TTS file "
-                            "does not exist."
-                        )
-
-                    # -------------------------------------
-                    # LOAD AUDIO INTO MEMORY
-                    # -------------------------------------
-
-                    with open(
-                        tts_path,
-                        "rb",
-                    ) as audio_file:
-
-                        generated_audio = (
-                            audio_file.read()
-                        )
-
-                    if not generated_audio:
-
-                        raise RuntimeError(
-                            "Generated audio "
-                            "is empty."
-                        )
-
-                    # -------------------------------------
-                    # STORE AUDIO IN SESSION
-                    # -------------------------------------
-
-                    st.session_state.report_audio = (
-                        generated_audio
+                    st.audio(
+                        audio,
+                        format="audio/wav",
                     )
-
-                # Rerun so the player appears immediately.
-                st.rerun()
 
             except Exception as exc:
 
                 st.error(
-                    f"TTS failed: {exc}"
+                    f"Voice generation failed: {exc}"
                 )
 
-                st.exception(
-                    exc
-                )
+    if (
+        st.session_state.audio_response
+        and not run_research
+    ):
 
-            finally:
-
-                # -----------------------------------------
-                # REMOVE TEMPORARY TTS FILE
-                # -----------------------------------------
-
-                if (
-                    tts_path
-                    and os.path.exists(
-                        tts_path
-                    )
-                ):
-
-                    try:
-
-                        os.remove(
-                            tts_path
-                        )
-
-                    except OSError:
-                        pass
-
-
-# =========================================================
-# AUDIO PLAYER
-# =========================================================
-
-if st.session_state.report_audio:
-
-    st.audio(
-        st.session_state.report_audio,
-        format="audio/mp3",
-    )
-
-    regenerate_voice = st.button(
-        "🔄 Regenerate Voice",
-        use_container_width=True,
-    )
-
-    if regenerate_voice:
-
-        st.session_state.report_audio = None
-
-        st.rerun()
+        st.audio(
+            st.session_state.audio_response,
+            format="audio/wav",
+        )
 
 
 # =========================================================
@@ -545,6 +743,7 @@ if st.session_state.report_audio:
 st.divider()
 
 st.caption(
-    "AI Research Platform • "
-    "Web + GitHub + Papers + Memory"
+    "Multi-Agent Research Platform • "
+    "LangGraph • Dynamic Routing • "
+    "Evidence Synthesis • Persistent Memory • Voice"
 )
