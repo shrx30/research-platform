@@ -74,12 +74,8 @@ builder.add_node(
 
 
 # =========================================================
-# START
+# START → PLANNER
 # =========================================================
-
-# Planner must run first because agents inspect
-# the execution plan to determine whether they
-# were selected.
 
 builder.add_edge(
     START,
@@ -88,11 +84,8 @@ builder.add_edge(
 
 
 # =========================================================
-# ROUTING
+# PLANNER → SELECTED AGENTS
 # =========================================================
-
-# route_agents decides which research agents
-# should execute based on planner output.
 
 builder.add_conditional_edges(
     "planner",
@@ -101,7 +94,7 @@ builder.add_conditional_edges(
 
 
 # =========================================================
-# AGENTS -> MERGE
+# AGENTS → MERGE
 # =========================================================
 
 builder.add_edge(
@@ -126,12 +119,8 @@ builder.add_edge(
 
 
 # =========================================================
-# SYNTHESIS
+# MERGE → SYNTHESIS
 # =========================================================
-
-# ==========================================
-# SYNTHESIS
-# ==========================================
 
 builder.add_edge(
     "merge",
@@ -139,26 +128,24 @@ builder.add_edge(
 )
 
 
-# ==========================================
-# PARALLEL POST-PROCESSING
-# ==========================================
+# =========================================================
+# SYNTHESIS → POST PROCESSING
+# =========================================================
 
-# Generate the user report.
 builder.add_edge(
     "research",
     "report",
 )
 
-# Store long-term memories independently.
 builder.add_edge(
     "research",
     "memory_write",
 )
 
 
-# ==========================================
-# END
-# ==========================================
+# =========================================================
+# POST PROCESSING → END
+# =========================================================
 
 builder.add_edge(
     "report",
@@ -169,10 +156,10 @@ builder.add_edge(
     "memory_write",
     END,
 )
+
 
 # =========================================================
 # COMPILE
 # =========================================================
 
 graph = builder.compile()
-
