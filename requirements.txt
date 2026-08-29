@@ -32,3 +32,4 @@ numpy
 pymupdf
 torch
 torchvision
+transformers
