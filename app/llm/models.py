@@ -30,7 +30,7 @@ llm = ChatNVIDIA(
 # =========================================================
 
 planner_base = ChatNVIDIA(
-    model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
+    model="nvidia/nemotron-3.5-lightning-30b-a3b",
     api_key=settings.NVIDIA_API_KEY,
     temperature=0,
     max_tokens=700,
