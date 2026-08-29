@@ -19,23 +19,25 @@ llm = ChatNVIDIA(
 
 
 # =========================================================
-# PLANNER BASE MODEL
+# PLANNER MODEL
 # =========================================================
 #
-# Planning output is tiny.
-# Do NOT give the planner a 180 second timeout.
+# Planner only needs to produce a small execution plan.
 #
+# Use the currently available Nemotron model instead of
+# the retired Llama 3.1 8B endpoint.
+#
+# =========================================================
 
 planner_base = ChatNVIDIA(
-    model="meta/llama-3.1-8b-instruct",
+    model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
     api_key=settings.NVIDIA_API_KEY,
     temperature=0,
     max_tokens=700,
-    timeout=30,
+    timeout=60,
 )
 
 
-# Structured planner
 planner_llm = planner_base.with_structured_output(
     ExecutionPlan
 )
@@ -45,15 +47,16 @@ planner_llm = planner_base.with_structured_output(
 # STRUCTURED FALLBACK MODEL
 # =========================================================
 #
-# Used if structured planner generation fails.
+# Used when structured planner generation needs a fallback.
 #
+# =========================================================
 
 structured_base = ChatNVIDIA(
-    model="meta/llama-3.1-8b-instruct",
+    model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
     api_key=settings.NVIDIA_API_KEY,
     temperature=0,
     max_tokens=1000,
-    timeout=40,
+    timeout=60,
 )
 
 
@@ -61,15 +64,16 @@ structured_base = ChatNVIDIA(
 # RESEARCH / SYNTHESIS MODEL
 # =========================================================
 #
-# Synthesis needs more capability than routing,
-# so keep Nemotron here.
+# Research synthesis needs more context and reasoning
+# capability than the planner.
 #
+# =========================================================
 
 research_base = ChatNVIDIA(
-    model="meta/llama-3.1-8b-instruct",
+    model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
     api_key=settings.NVIDIA_API_KEY,
     temperature=0,
-    max_tokens=1500,
+    max_tokens=2000,
     timeout=60,
 )
 
@@ -83,13 +87,11 @@ research_llm = research_base.with_structured_output(
 # RELEVANCE CLASSIFIER
 # =========================================================
 #
-# Classification is a small-model task.
+# Small classification task.
 #
+# For now use the general reasoning model rather than
+# depending on another NVIDIA model that may be retired.
+#
+# =========================================================
 
-relevance_llm = ChatNVIDIA(
-    model="meta/llama-3.1-8b-instruct",
-    api_key=settings.NVIDIA_API_KEY,
-    temperature=0,
-    max_tokens=200,
-    timeout=30,
-)
+relevance_llm = llm
