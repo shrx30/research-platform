@@ -16,10 +16,6 @@ from app.graph.nodes import (
 )
 
 
-# =========================================================
-# GRAPH
-# =========================================================
-
 builder = StateGraph(ResearchState)
 
 
@@ -74,7 +70,7 @@ builder.add_node(
 
 
 # =========================================================
-# START → PLANNER
+# START
 # =========================================================
 
 builder.add_edge(
@@ -84,7 +80,7 @@ builder.add_edge(
 
 
 # =========================================================
-# PLANNER → SELECTED AGENTS
+# PLANNER → AGENTS
 # =========================================================
 
 builder.add_conditional_edges(
@@ -119,7 +115,7 @@ builder.add_edge(
 
 
 # =========================================================
-# MERGE → SYNTHESIS
+# MERGE → RESEARCH
 # =========================================================
 
 builder.add_edge(
@@ -129,7 +125,7 @@ builder.add_edge(
 
 
 # =========================================================
-# SYNTHESIS → POST PROCESSING
+# RESEARCH → PARALLEL POST PROCESSING
 # =========================================================
 
 builder.add_edge(
