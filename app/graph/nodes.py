@@ -1275,6 +1275,10 @@ GROUNDING RULES:
 # REPORT
 # =========================================================
 
+# =========================================================
+# REPORT
+# =========================================================
+
 def report_node(
     state: ResearchState,
 ):
@@ -1291,8 +1295,137 @@ def report_node(
             "Report node received no research result."
         )
 
+    # -----------------------------------------------------
+    # Convert structured ResearchResult into user-facing
+    # markdown.
+    # -----------------------------------------------------
+
+    summary = safe_string(
+        result.summary
+    )
+
+    key_findings = (
+        result.key_findings
+        if result.key_findings
+        else []
+    )
+
+    sources_used = (
+        result.sources_used
+        if result.sources_used
+        else []
+    )
+
+    missing_information = (
+        result.missing_information
+        if result.missing_information
+        else []
+    )
+
+    confidence = safe_string(
+        result.confidence
+    )
+
+    sections = []
+
+    # -----------------------------------------------------
+    # SUMMARY
+    # -----------------------------------------------------
+
+    sections.append(
+        "## Summary\n\n"
+        + summary
+    )
+
+    # -----------------------------------------------------
+    # KEY FINDINGS
+    # -----------------------------------------------------
+
+    if key_findings:
+
+        findings_text = "\n".join(
+            f"- {safe_string(finding)}"
+            for finding in key_findings
+            if safe_string(finding)
+        )
+
+        if findings_text:
+
+            sections.append(
+                "## Key Findings\n\n"
+                + findings_text
+            )
+
+    # -----------------------------------------------------
+    # SOURCES
+    # -----------------------------------------------------
+
+    if sources_used:
+
+        source_text = "\n".join(
+            f"- {safe_string(source)}"
+            for source in sources_used
+            if safe_string(source)
+        )
+
+        if source_text:
+
+            sections.append(
+                "## Sources Used\n\n"
+                + source_text
+            )
+
+    # -----------------------------------------------------
+    # MISSING INFORMATION
+    # -----------------------------------------------------
+
+    if missing_information:
+
+        missing_text = "\n".join(
+            f"- {safe_string(item)}"
+            for item in missing_information
+            if safe_string(item)
+        )
+
+        if missing_text:
+
+            sections.append(
+                "## Missing Information\n\n"
+                + missing_text
+            )
+
+    # -----------------------------------------------------
+    # CONFIDENCE
+    # -----------------------------------------------------
+
+    if confidence:
+
+        sections.append(
+            "## Confidence\n\n"
+            + confidence
+        )
+
+    # -----------------------------------------------------
+    # FINAL REPORT
+    # -----------------------------------------------------
+
+    report = "\n\n".join(
+        sections
+    ).strip()
+
+    if not report:
+
+        raise RuntimeError(
+            "Report generation produced empty output."
+        )
+
     print(
-        "[REPORT] Research result ready."
+        "[REPORT] Report generated."
+    )
+
+    print(
+        "[REPORT] Length:",
+        len(report),
     )
 
     log_latency(
@@ -1300,7 +1433,9 @@ def report_node(
         node_start,
     )
 
-    return {}
+    return {
+        "report": report
+    }
 
 
 # =========================================================
