@@ -30,3 +30,5 @@ pandas
 numpy
 
 pymupdf
+torch
+torchvision
