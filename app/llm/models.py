@@ -6,7 +6,7 @@ from app.schemas.research import ResearchResult
 
 
 # =========================================================
-# GENERAL REASONING MODEL
+# FAST GENERAL MODEL
 # =========================================================
 
 llm = ChatNVIDIA(
@@ -19,79 +19,38 @@ llm = ChatNVIDIA(
 
 
 # =========================================================
-# PLANNER MODEL
-# =========================================================
-#
-# Planner only needs to produce a small execution plan.
-#
-# Use the currently available Nemotron model instead of
-# the retired Llama 3.1 8B endpoint.
-#
+# KIMI K3
 # =========================================================
 
-planner_base = ChatNVIDIA(
-    model="nvidia/nemotron-3.5-lightning-30b-a3b",
+kimi_k3 = ChatNVIDIA(
+    model="moonshotai/kimi-k3",
     api_key=settings.NVIDIA_API_KEY,
     temperature=0,
-    max_tokens=700,
-    timeout=60,
+    max_tokens=3000,
+    timeout=90,
 )
 
 
-planner_llm = planner_base.with_structured_output(
+# =========================================================
+# PLANNER
+# =========================================================
+
+planner_llm = kimi_k3.with_structured_output(
     ExecutionPlan
 )
 
 
 # =========================================================
-# STRUCTURED FALLBACK MODEL
-# =========================================================
-#
-# Used when structured planner generation needs a fallback.
-#
+# RESEARCH SYNTHESIS
 # =========================================================
 
-structured_base = ChatNVIDIA(
-    model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
-    api_key=settings.NVIDIA_API_KEY,
-    temperature=0,
-    max_tokens=1000,
-    timeout=60,
-)
-
-
-# =========================================================
-# RESEARCH / SYNTHESIS MODEL
-# =========================================================
-#
-# Research synthesis needs more context and reasoning
-# capability than the planner.
-#
-# =========================================================
-
-research_base = ChatNVIDIA(
-    model="nvidia/llama-3.3-nemotron-super-49b-v1.5",
-    api_key=settings.NVIDIA_API_KEY,
-    temperature=0,
-    max_tokens=2000,
-    timeout=60,
-)
-
-
-research_llm = research_base.with_structured_output(
+research_llm = kimi_k3.with_structured_output(
     ResearchResult
 )
 
 
 # =========================================================
-# RELEVANCE CLASSIFIER
-# =========================================================
-#
-# Small classification task.
-#
-# For now use the general reasoning model rather than
-# depending on another NVIDIA model that may be retired.
-#
+# RELEVANCE
 # =========================================================
 
 relevance_llm = llm
