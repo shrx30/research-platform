@@ -23,7 +23,7 @@ llm = ChatNVIDIA(
 # =========================================================
 
 kimi_k3 = ChatNVIDIA(
-    model="moonshotai/kimi-k3",
+    model="openai/gpt-oss-20b",
     api_key=settings.NVIDIA_API_KEY,
     temperature=0,
     max_tokens=3000,
